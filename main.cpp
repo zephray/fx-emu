@@ -24,7 +24,7 @@ int main(int argc, char * argv[]) {
     SDL_WM_SetCaption("fx-emu", NULL);
 
     rom_init();
-    cpu_loop(100);
+    cpu_loop(10);
     
     printf("STATUS = %02x, A = %02x\n", mmio_read_byte(REG_STATUS), mmio_read_byte(REG_ACC));
 

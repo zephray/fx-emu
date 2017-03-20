@@ -60,11 +60,89 @@ void cpu_reset() {
     mmio_reset();
 }
 
+uint8_t alu_add(uint8_t a, uint8_t b) {
+    uint8_t result;
+    
+    result = a + b;
+    status_zero(result);
+    status_carry(((uint16_t)a+(uint16_t)b)&0x100);
+    status_ov_add(a, b, result);
+    status_sle(!(result&0x80));//Working weird
+    status_sge(result&0x80);
+    
+    return result;
+}
+
+uint8_t alu_adc(uint8_t a, uint8_t b, uint8_t c) {
+    uint8_t result;
+    
+    result = a + b + c;
+    status_zero(result);
+    status_carry(((uint16_t)a+(uint16_t)b+(uint16_t)c)&0x100);
+    status_ov(((uint16_t)a+(uint16_t)b+(uint16_t)c)>0x7F);
+    status_sle(!(result&0x80));//Working weird
+    status_sge(result&0x80);
+    
+    return result;
+}
+
+uint8_t alu_sub(uint8_t a, uint8_t b) {
+    uint8_t result;
+
+    result = a - b;
+    status_zero(result);
+    status_carry(!(a<b));
+    status_ov_sub(a, b, result);
+    status_sle(!(result&0x80));//Working weird
+    status_sge(result&0x80);
+
+    return result;
+}
+
+uint8_t alu_subb(uint8_t a, uint8_t b, uint8_t c) {
+    uint8_t result;
+
+    result = a - b - c;
+    status_zero(result);
+    status_carry(!(a<(b+c)));
+    status_ov(((int16_t)a-(int16_t)b-(int16_t)c)<(0-0x7F));
+    status_sle(!(result&0x80));//Working weird
+    status_sge(result&0x80);
+
+    return result;
+}
+
+//BCD Addition
+uint8_t alu_adddc(uint8_t a, uint8_t b, uint8_t c) {
+    uint8_t a1, b1, s1;
+
+    a1 = ( a >> 4 ) * 10 + ( a & 0xFF );
+    b1 = ( b >> 4 ) * 10 + ( b & 0xFF );
+    
+    s1 = a1 + b1 + c;
+    status_carry((s1 > 99));
+
+    return (s1/10) << 4 | (s1%10);
+}
+
+uint8_t alu_subdb(uint8_t a, uint8_t b, uint8_t c) {
+    uint8_t a1, b1;
+    uint8_t s1;
+
+    a1 = ( a >> 4 ) * 10 + ( a & 0xFF );
+    b1 = ( b >> 4 ) * 10 + ( b & 0xFF );
+    
+    s1 = a1 - b1 - c;
+    status_carry(!(a1<(b1+c)));
+
+    return (s1/10) << 4 | (s1%10);
+}
+
 void cpu_interpret_instruction(uint32_t instr) {
     uint16_t instr1;
     uint16_t imm1, imm2, imm3;
     uint32_t newpc;
-    uint8_t  temp8, temp8_2, temp8_3;  //instruction related temp
+    uint8_t  temp8;  //instruction related temp
     uint16_t temp16; //instruction related temp
     uint32_t temp32; //instruction related temp
     
@@ -187,23 +265,160 @@ void cpu_interpret_instruction(uint32_t instr) {
                              status_carry(((uint16_t)temp8+1)&0x100);
                              temp8 += 1; 
                              status_zero(temp8);
-                             mmio_write_byte_internal(REG_ACC, temp8 & 0xFF);
+                             mmio_write_byte_internal(REG_ACC, temp8);
                              break;//inca r
                 case 0x1D00: temp8 = mmio_read_byte(imm1);
                              status_carry(((uint16_t)temp8+1)&0x100);
                              temp8 += 1; 
                              status_zero(temp8);
-                             mmio_write_byte(imm1, temp8 & 0xFF);
+                             mmio_write_byte(imm1, temp8);
                              break;//inc r
-                case 0x1000: temp8 = mmio_read_byte(imm1);
-                             temp8_2 = mmio_read_byte_internal(REG_ACC);
-                             temp8_3 = temp8 + temp8_2;
+                case 0x1000: mmio_write_byte_internal(REG_ACC, 
+                                alu_add(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC)));
+                             break;//add a, r
+                case 0x1100: mmio_write_byte(imm1, 
+                                alu_add(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC)));
+                             break;//add r, a
+                case 0x4A00: mmio_write_byte_internal(REG_ACC, 
+                                alu_add(imm1, mmio_read_byte_internal(REG_ACC)));
+                             break;//add a, #
+                case 0x1200: mmio_write_byte_internal(REG_ACC, 
+                                alu_adc(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                status&0x01));
+                             break;//adc a, r
+                case 0x1300: mmio_write_byte_internal(imm1, 
+                                alu_adc(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                status&0x01));
+                             break;//adc r, a
+                case 0x4B00: mmio_write_byte_internal(REG_ACC, 
+                                alu_adc(imm1, mmio_read_byte_internal(REG_ACC),
+                                status&0x01));
+                             break;//adc a, #
+                case 0x1E00: temp8 = mmio_read_byte(imm1);
+                             status_carry(!(imm1<1));
+                             temp8 -= 1; 
                              status_zero(temp8);
-                             status_carry(((uint16_t)temp8+(uint16_t)temp8_2)&0x100);
-                             status_ov_add(temp8, temp8_2, temp8_3);
-                             status_sle((int8_t)temp8_3 <= 0);
-                             status_sge((int8_t)temp8_3 >= 0);
-                             mmio_write_byte_internal(REG_ACC, temp8_3);
+                             mmio_write_byte_internal(REG_ACC, temp8);
+                             break;//deca r
+                case 0x1F00: temp8 = mmio_read_byte(imm1);
+                             status_carry(!(imm1<1));
+                             temp8 -= 1; 
+                             status_zero(temp8);
+                             mmio_write_byte(imm1, temp8);
+                             break;//dec r
+                case 0x1600: mmio_write_byte_internal(REG_ACC,
+                                alu_sub(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC)));
+                             break;//sub a, r            
+                case 0x1700: mmio_write_byte(imm1,
+                                alu_sub(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC)));
+                             break;//sub r, a
+                case 0x4C00: mmio_write_byte_internal(REG_ACC,
+                                alu_sub(imm1, mmio_read_byte_internal(REG_ACC)));
+                             break;//sub a, #         
+                case 0x1800: mmio_write_byte_internal(REG_ACC,
+                                alu_subb(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                ((status&0x01)?0:1)));
+                             break;//subb a, r            
+                case 0x1900: mmio_write_byte(imm1,
+                                alu_subb(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                ((status&0x01)?0:1)));
+                             break;//subb r, a
+                case 0x4D00: mmio_write_byte_internal(REG_ACC,
+                                alu_subb(imm1, mmio_read_byte_internal(REG_ACC),
+                                ((status&0x01)?0:1)));
+                             break;//subb a, #         
+                case 0x1400: mmio_write_byte_internal(REG_ACC,
+                                alu_adddc(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                status&0x01));
+                             break;//adddc a, r
+                case 0x1500: mmio_write_byte(imm1,
+                                alu_adddc(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                status&0x01));
+                             break;//adddc r, a
+                case 0x1A00: mmio_write_byte_internal(REG_ACC,
+                                alu_subdb(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                ((status&0x01)?0:1)));
+                             break;//subdb a, r
+                case 0x1B00: mmio_write_byte(imm1,
+                                alu_subdb(mmio_read_byte(imm1), mmio_read_byte_internal(REG_ACC),
+                                ((status&0x01)?0:1)));
+                             break;//subdb r,a
+                case 0x0A00: temp8 = mmio_read_byte(imm1);
+                             temp16 = temp8 & 0x01;
+                             temp8 >>= 1;
+                             temp8 |= (status&0x01) << 7;
+                             status_carry(temp16);
+                             mmio_write_byte_internal(REG_ACC, temp8);
+                             break;//rrca r
+                case 0x0B00: temp8 = mmio_read_byte(imm1);
+                             temp16 = temp8 & 0x01;
+                             temp8 >>= 1;
+                             temp8 |= (status&0x01) << 7;
+                             status_carry(temp16);
+                             mmio_write_byte(imm1, temp8);
+                             break;//rrc r
+                case 0x0C00: temp8 = mmio_read_byte(imm1);
+                             temp16 = temp8 & 0x80;
+                             temp8 <<= 1;
+                             temp8 |= status&0x01;
+                             status_carry(temp16);
+                             mmio_write_byte_internal(REG_ACC, temp8);
+                             break;//rlca r
+                case 0x0D00: temp8 = mmio_read_byte(imm1);
+                             temp16 = temp8 & 0x80;
+                             temp8 <<= 1;
+                             temp8 |= status&0x01;
+                             status_carry(temp16);
+                             mmio_write_byte(imm1, temp8);
+                             break;//rlc r
+                case 0x2200: temp8 = mmio_read_byte(imm1);
+                             temp8 >>= 1;
+                             temp8 |= (status&0x01) << 7;
+                             mmio_write_byte_internal(REG_ACC, temp8);
+                             break;//shra r
+                case 0x2300: temp8 = mmio_read_byte(imm1);
+                             temp8 <<= 1;
+                             temp8 |= status&0x01;
+                             mmio_write_byte_internal(REG_ACC, temp8);
+                             break;//shla r
+                case 0x5400: temp8 = mmio_read_byte_internal(REG_ACC);
+                             mmio_write_byte_internal(REG_ACC, mmio_read_byte(imm1));
+                             mmio_write_byte(imm1, temp8);
+                             break;//ex r
+                case 0x5200: temp8 = mmio_read_byte_internal(REG_ACC);
+                             temp16 = mmio_read_byte(imm1);
+                             temp32 = temp8;
+                             temp8 &= 0xF0;
+                             temp8 |= temp16 & 0x0F;
+                             temp16 &= 0xF0;
+                             temp16 |= temp32 & 0x0F;
+                             mmio_write_byte(imm1, temp16);
+                             mmio_write_byte_internal(REG_ACC, temp8);
+                             break;//exl r
+                case 0x5300: temp8 = mmio_read_byte_internal(REG_ACC);
+                             temp16 = mmio_read_byte(imm1);
+                             temp32 = temp8;
+                             temp8 &= 0x0F;
+                             temp8 |= temp16 & 0xF0;
+                             temp16 &= 0x0F;
+                             temp16 |= temp32 & 0xF0;
+                             mmio_write_byte(imm1, temp16);
+                             mmio_write_byte_internal(REG_ACC, temp8);
+                             break;//exh r
+                case 0x2600: temp8 = mmio_read_byte(imm1);
+                             temp8 &= 0xF0;
+                             temp8 |= mmio_read_byte_internal(REG_ACC) & 0xF;
+                             mmio_write_byte(imm1, temp8);
+                             break;//movl r, a
+                case 0x2800: temp8 = mmio_read_byte(imm1);
+                             temp8 &= 0x0F;
+                             temp8 |= mmio_read_byte_internal(REG_ACC) << 4;
+                             mmio_write_byte(imm1, temp8);
+                             break;//movh r, a
+                case 0x2900: mmio_write_byte_internal(REG_ACC, mmio_read_byte(imm1)&0x0F);
+                             break;//movl a, r
+                case 0x2A00: mmio_write_byte_internal(REG_ACC, mmio_read_byte(imm1)>>4);
+                             break;//movh a, r
             }
             break;
         }

@@ -45,6 +45,7 @@ I?===:~~~~~:,,,,,:~~~~~~~~~.:+.,,.~?,I77777I,~,,~~~~~~~..,~~~~~~~~?+7
 
 #include <iostream>
 #include <string>
+#include <SDL.h>
 
 const std::string VERSION = "0.1.0";
 

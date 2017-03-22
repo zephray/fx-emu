@@ -1,4 +1,3 @@
-#include "SDL/SDL.h"
 #include "main.hpp"
 #include "lcd.hpp"
 #include "cpu.hpp"
@@ -11,17 +10,17 @@ void log(string text) {
     cout << "[" << SDL_GetTicks() << "] " << text << endl;
 }
 
-int main(int argc, char * argv[]) {
+int main(int argc, char * args[]) {
+	SDL_Window * window;
     SDL_Surface * screen;
     SDL_Surface * lcd;
 
     cout << "fx-emu " << VERSION << endl;
 
     SDL_Init(SDL_INIT_VIDEO);
-    screen = SDL_SetVideoMode(384, 128, 16, SDL_SWSURFACE);
-    lcd = SDL_CreateRGBSurface(SDL_SWSURFACE, 96, 32, 16,
-        0xF800, 0x07E0, 0x001F, 0);
-    SDL_WM_SetCaption("fx-emu", NULL);
+	window = SDL_CreateWindow("fx-emu", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 384, 128, SDL_WINDOW_SHOWN);
+	screen = SDL_GetWindowSurface(window);
+	lcd = SDL_CreateRGBSurface(0, 96, 32, 32, 0, 0, 0, 0);
 
     rom_init();
     cpu_loop(10);
@@ -30,9 +29,9 @@ int main(int argc, char * argv[]) {
 
     lcd_flush(lcd);
 
-    SDL_SoftStretch(lcd, NULL, screen, NULL);
+	SDL_BlitScaled(lcd, NULL, screen, NULL);
 
-    SDL_Flip(screen);
+	SDL_UpdateWindowSurface(window);
 
     SDL_Delay(5000);
 

@@ -7,10 +7,10 @@ CFILES = $(wildcard ./*.c)
 CPPFILES = $(wildcard ./*.cpp)
 OBJFILES = $(CFILES:.c=.o) $(CPPFILES:.cpp=.o)
 
-CCFLAGS = `sdl-config --cflags` -g -Wall -O2 -fno-strict-aliasing
+CCFLAGS = `sdl2-config --cflags` -g -Wall -O2 -fno-strict-aliasing
 CXXFLAGS = $(CCFLAGS) -std=c++11
 CFLAGS = $(CCFLAGS) -std=gnu99
-LDFLAGS = `sdl-config --libs` -lstdc++ -lm
+LDFLAGS = `sdl2-config --libs` -lstdc++ -lm
 
 $(TARGET): $(OBJFILES)
 	$(HOST)g++ $(OBJFILES) -o $(TARGET) $(LDFLAGS)

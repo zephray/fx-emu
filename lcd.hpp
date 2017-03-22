@@ -3,10 +3,9 @@
 #pragma once
 #include "main.hpp"
 #include "eps.hpp"
-#include "SDL/SDL.h"
 
-const uint32_t PIX_ON  = 0x0000;
-const uint32_t PIX_OFF = 0xFFFF;
+const uint32_t PIX_ON  = 0x00000000;
+const uint32_t PIX_OFF = 0x00FFFFFF;
 
 //Address:
 //00-FF: Regular Register Address

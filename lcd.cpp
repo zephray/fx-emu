@@ -65,8 +65,8 @@ void lcd_ram_write_byte(uint16_t addr, uint8_t byte) {
 }
 
 void lcd_flush(SDL_Surface *surface) {
-    uint16_t *pixels = (uint16_t *)surface->pixels;
-    uint16_t pixel;
+    uint32_t *pixels = (uint32_t *)surface->pixels;
+    uint32_t pixel;
     for (int i = 0; i < 96; i++) {
         for (int j = 0; j < 4; j++) {
             for (int k = 0; k < 8; k++) {
@@ -78,7 +78,7 @@ void lcd_flush(SDL_Surface *surface) {
 }
 
 void *lcd_save_state(size_t *size) {
-
+	return NULL;
 }
 
 void lcd_load_state(void *state) {

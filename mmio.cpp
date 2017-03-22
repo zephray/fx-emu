@@ -67,7 +67,7 @@ void mmio_write_byte(uint8_t addr, uint8_t byte) {
 //0100-017F: RAM Bank 0
 //0180-3FFF: Other RAM Banks
 uint8_t mmio_mem_read_byte(uint16_t addr) {
-
+	return 0;//fix me
 }
 
 void mmio_mem_write_byte(uint16_t addr, uint8_t byte) {
@@ -94,7 +94,7 @@ void mmio_reset() {
 }
 
 void *mmio_save_state(size_t *size) {
-
+	return NULL;
 }
 
 void mmio_load_state(void *state) {

@@ -26,5 +26,14 @@
 #define REG_LCDARH  0x23
 #define REG_LCDCON  0x2E
 
+#define BIT_FSR0PE	0x01
+#define BIT_FSR1PE  0x02
+#define BIT_LCDPE   0x04
+#define BIT_FSR2PE  0x08
+#define BIT_FSR0ID  0x10
+#define BIT_FSR1ID  0x20
+#define BIT_LCDID   0x40
+#define BIT_FSR2ID  0x80
+
 //Unknown behavior:
 //What if you RPT a JUMP?

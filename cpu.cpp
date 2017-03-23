@@ -140,10 +140,10 @@ uint8_t alu_subdb(uint8_t a, uint8_t b, uint8_t c) {
 
 void cpu_interpret_instruction(uint32_t instr) {
     uint16_t instr1;
-    uint16_t imm16_1, imm16_2;
+    uint16_t imm16_1;
 	uint8_t imm8_1, imm8_2;
 	uint32_t imm32_1;
-    uint32_t newpc;
+    uint32_t newpc, mempc;
     uint8_t  temp8_1, temp8_2, temp8_3;  //instruction related temp
     uint16_t temp16; //instruction related temp
     uint32_t temp32; //instruction related temp
@@ -178,7 +178,9 @@ void cpu_interpret_instruction(uint32_t instr) {
                          newpc = imm32_1;
                          break;
             default: //no match again
-            imm8_1 = instr1 & 0xFF; //just assume
+            imm8_1 = instr1 & 0x00FF; //just assume
+			imm16_1 = imm16_1 = instr & 0x0000FFFF; //important: only change low 16 bits of PC
+			imm8_2 = (instr1 & 0x0700) >> 8; //used in JBC/JBS/BC/BS/BTG
             switch (instr1 & 0xFF00) {
                 case 0x2000: mmio_write_byte_internal(REG_ACC, mmio_read_byte(imm8_1));
                              break;//mov a, r
@@ -421,15 +423,120 @@ void cpu_interpret_instruction(uint32_t instr) {
                              break;//movl a, r
                 case 0x2A00: mmio_write_byte_internal(REG_ACC, mmio_read_byte(imm8_1)>>4);
                              break;//movh a, r
+				case 0x0100: temp8_1 = mmio_read_byte_internal(REG_ACC);
+							 temp8_2 = mmio_read_byte(imm8_1);
+							 mmio_write_byte_internal(REG_ACC, (temp8_1 & 0xF0) | (temp8_2 & 0x0F));
+							 temp8_2 >>= 4;
+							 temp8_2 |= temp8_1 << 4;
+							 mmio_write_byte(imm8_1, temp8_2);
+							 break;//sfr4 r
+				case 0x4F00: temp8_1 = mmio_read_byte_internal(REG_ACC);
+							 temp8_2 = mmio_read_byte(imm8_1);
+							 mmio_write_byte_internal(REG_ACC, (temp8_1 & 0xF0) | (temp8_2 >> 4));
+							 temp8_2 <<= 4;
+							 temp8_2 |= temp8_1 & 0x0F;
+							 break;//sfl4 r
+				case 0x0F00: temp8_1 = mmio_read_byte(imm8_1);
+							 mmio_write_byte(imm8_1, ((temp8_1 >> 4) | (temp8_1 << 4)));
+							 break;//swap r
+				case 0x0E00: temp8_1 = mmio_read_byte(imm8_1);
+							 mmio_write_byte_internal(REG_ACC, ((temp8_1 >> 4) | (temp8_1 << 4)));
+							 break;//swapa r
+				case 0x5000: temp8_1 = mmio_read_byte(imm8_1) - 1;
+							 if (temp8_1 != 0) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 mmio_write_byte_internal(REG_ACC, temp8_1);
+					         break;//jdnz a, r, addr
+				case 0x5100: temp8_1 = mmio_read_byte(imm8_1) - 1;
+							 if (temp8_1 != 0) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 mmio_write_byte(imm8_1, temp8_1);
+							 break;//jdnz r, addr
+				case 0x4700: if (mmio_read_byte_internal(REG_ACC) >= imm8_1) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 break;//jge a, #k, addr
+				case 0x4800: if (mmio_read_byte_internal(REG_ACC) <= imm8_1) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 break;//jle a, #k, addr
+				case 0x4900: if (mmio_read_byte_internal(REG_ACC) == imm8_1) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 break;//je a, #k, addr
+				case 0x5500: if (mmio_read_byte_internal(REG_ACC) >= mmio_read_byte(imm8_1)) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 break;//jge a, r, addr
+				case 0x5600: if (mmio_read_byte_internal(REG_ACC) <= mmio_read_byte(imm8_1)) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 break;//jle a, r, addr
+				case 0x5700: if (mmio_read_byte_internal(REG_ACC) == mmio_read_byte(imm8_1)) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 break;//je a, r, addr
+				default: //no match (OP CODE MASK 0xFF)
+					if ((instr1 & 0xFC00) == 0x2C00) { //OP CODE MASK 0xFC, TBRD opt, r
+						temp32 = (mmio_read_byte_internal(REG_TABPTRH) << 16) |
+							(mmio_read_byte_internal(REG_TABPTRM) << 8) |
+							mmio_read_byte_internal(REG_TABPTRL);
+						temp16 = rom_read_word(temp32 >> 1);
+						if (temp32 & 0x01) temp16 >>= 8;
+						mmio_write_byte(imm8_1, temp16 & 0xff);
+						if ((instr1 & 0x0300) == 0x0100)
+							temp32++;
+						else if ((instr1 & 0x0300) == 0x0200)
+							temp32--;
+						mmio_write_byte_internal(REG_TABPTRH, (temp32 >> 16) & 0xFF);
+						mmio_write_byte_internal(REG_TABPTRM, (temp32 >> 8) & 0xFF);
+						mmio_write_byte_internal(REG_TABPTRL, temp32 & 0xFF);
+					}
+					else { //no match (OP CODE MASK 0xFC)
+						switch (instr1 & 0xF800) {
+							case 0x6800: mmio_write_byte(imm8_1, (mmio_read_byte(imm8_1) & ~(1 << (imm8_2))));
+										 break; //bc r, b
+							case 0x7000: mmio_write_byte(imm8_1, (mmio_read_byte(imm8_1) | (1 << (imm8_2))));
+										 break; //bs r, b
+							case 0x7800: temp8_1 = mmio_read_byte(imm8_1);
+										 if (temp8_1 & (1 << imm8_2))
+											temp8_1 &= ~(1 << (imm8_2));
+										 else
+											temp8_1 |= (1 << (imm8_2));
+										 mmio_write_byte(imm8_1, temp8_1);
+										 break; //btg r, b
+							case 0x5800: if (!(mmio_read_byte(imm8_1) & (1 << imm8_2))) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+										 break; //jbc r, b, addr
+							case 0x6000: if (!(mmio_read_byte(imm8_1) & (1 << imm8_2))) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+										 break; //jbc r, b, addr
+							default: //no match (OP CODE MASK 0xF8)
+								if ((instr1 & 0xF000) == 0x3000) { //OP CODE MASK 0xF0 S0CALL
+									cpu_push(newpc);
+									newpc = instr1 & 0x0FFF;
+								}
+								else { //no match (OP CODE MASK 0xF0)
+									switch (instr1 & 0xE000) {
+										case 0xE000: cpu_push(newpc); //scall, run through
+										case 0xC000: newpc &= 0xFFFFE000;
+													 newpc |= (instr1 & 0x1FFF);
+													 break; //sjmp
+										case 0x8000: mmio_write_byte(((instr1 & 0x1F00) >> 8), mmio_read_byte(instr1 & 0x00FF));
+													 break; //movrp
+										case 0xA000: mmio_write_byte((instr1 & 0x00FF), mmio_read_byte((instr1 & 0x1F00) >> 8));
+													 break; //movpr
+										default: //INVAILD INSTRUCTION
+											printf("[Warning] Invaild instruction @ %4xh!\n", pc);
+											break;
+									}
+								}
+								break;
+						}
+					}
+					break;
             }
             break;
         }
         break;
     }
-    pc = newpc;
-    mmio_write_byte_internal(REG_PCL, pc&0xFF);
-    mmio_write_byte_internal(REG_PCM, (pc>>8)&0xFF);
-    mmio_write_byte_internal(REG_PCH, (pc>>16)&0xFF);
+	
+	mempc = (uint32_t)mmio_read_byte_internal(REG_PCH) << 16;
+	mempc |= (uint32_t)mmio_read_byte_internal(REG_PCM) << 8;
+	mempc |= (uint32_t)mmio_read_byte_internal(REG_PCL);
+	if (mempc == pc) { //Not changed during instruction execution
+		pc = newpc;
+		mmio_write_byte_internal(REG_PCL, pc & 0xFF);
+		mmio_write_byte_internal(REG_PCM, (pc >> 8) & 0xFF);
+		mmio_write_byte_internal(REG_PCH, (pc >> 16) & 0xFF);
+	}
+	else {
+		pc = mempc; //Load PC with PC in the register set
+	}
     mmio_write_byte_internal(REG_STATUS, status);
     
 }

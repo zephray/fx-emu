@@ -9,6 +9,8 @@ uint8_t static regs[0x7f];
 uint8_t static ram_wbk[27]; //Mapped into 0x25-0x3F if WBK=1
 uint8_t static ram[64*128];
 
+#define mem_page (uint16_t)(regs[REG_BSR]&0x3F)
+
 void mmio_bad_read_byte(uint8_t addr) {
     
 }
@@ -22,15 +24,63 @@ void mmio_bad_write_byte(uint8_t addr) {
 uint8_t mmio_read_byte(uint8_t addr) {
     uint8_t byte;
     if (addr&0x80) {
-        return ram[addr&0x7F];
+        return ram[(mem_page << 7) | addr & 0x7F];
     } else {
         switch (addr) {
+			case REG_INDF0:
+				if (regs[REG_FSR0] & 0x80) {
+					byte = ram[((regs[REG_BSR] & 0x3F) << 7) | (regs[REG_FSR0] & 0x7F)];
+				}
+				else {
+					if (regs[REG_BSR] != 0) mmio_bad_read_byte(addr);
+					byte = regs[REG_FSR0];
+				}
+				if (regs[REG_POSTID] & BIT_FSR0PE) {
+					if (regs[REG_POSTID] & BIT_FSR0ID) { //Auto Inc
+						regs[REG_FSR0] ++;
+					}
+					else { //Auto Dec
+						regs[REG_FSR0] --;
+					}
+				}
+				break;
+			case REG_INDF1:
+				byte = ram[((regs[REG_BSR1] & 0x3F) << 7) | (regs[REG_FSR1] & 0x7F)];
+				if (regs[REG_POSTID] & BIT_FSR1PE) {
+					if (regs[REG_POSTID] & BIT_FSR1ID) { //Auto Inc
+						if (regs[REG_FSR1] == 0xFF)
+							regs[REG_BSR1] ++; //carry
+						regs[REG_FSR1] ++;
+					}
+					else { //Auto Dec
+						if (regs[REG_FSR1] == 0x00)
+							regs[REG_BSR1] --; //borrow
+						regs[REG_FSR1] --;
+					}
+				}
+				break;
+			case REG_INDF2:
+				byte = ram[((regs[REG_BSR2] & 0x3F) << 7) | (regs[REG_FSR2] & 0x7F)];
+				if (regs[REG_POSTID] & BIT_FSR2PE) {
+					if (regs[REG_POSTID] & BIT_FSR2ID) { //Auto Inc
+						if (regs[REG_FSR2] == 0xFF)
+							regs[REG_BSR2] ++; //carry
+						regs[REG_FSR2] ++;
+					}
+					else { //Auto Dec
+						if (regs[REG_FSR2] == 0x00)
+							regs[REG_BSR2] --; //borrow
+						regs[REG_FSR2] --;
+					}
+				}
+				break;
             case REG_POSTID:
             case REG_LCDARH:
             case REG_LCDARL:
             case REG_LCDDAT:
-            case REG_LCDCON: byte = lcd_read_byte(addr);
-                             break;
+            case REG_LCDCON: 
+				byte = lcd_read_byte(addr);
+                break;
             default: byte = regs[addr]; break;
         }
         return byte;
@@ -48,10 +98,57 @@ uint8_t mmio_read_byte_internal(uint8_t addr) {
 void mmio_write_byte(uint8_t addr, uint8_t byte) {
     //printf("Writing byte %02x at addr %02x\n", byte, addr);
     if (addr&0x80) {
-        ram[addr&0x7F] = byte;
+        ram[(mem_page<<7)|addr&0x7F] = byte;
     } else {
-        regs[addr] = byte;
+        regs[addr] = byte;//Do all write
         switch (addr) {
+			case REG_INDF0:
+				if (regs[REG_FSR0] & 0x80) {
+					ram[((regs[REG_BSR] & 0x3F) << 7) | (regs[REG_FSR0] & 0x7F)] = byte;
+				}
+				else {
+					if (regs[REG_BSR] != 0) mmio_bad_read_byte(addr);
+					regs[REG_FSR0] = byte;
+				}
+				if (regs[REG_POSTID] & BIT_FSR0PE) {
+					if (regs[REG_POSTID] & BIT_FSR0ID) { //Auto Inc
+						regs[REG_FSR0] ++;
+					}
+					else { //Auto Dec
+						regs[REG_FSR0] --;
+					}
+				}
+				break;
+			case REG_INDF1:
+				ram[((regs[REG_BSR1] & 0x3F) << 7) | (regs[REG_FSR1] & 0x7F)] = byte;
+				if (regs[REG_POSTID] & BIT_FSR1PE) {
+					if (regs[REG_POSTID] & BIT_FSR1ID) { //Auto Inc
+						if (regs[REG_FSR1] == 0xFF)
+							regs[REG_BSR1] ++; //carry
+						regs[REG_FSR1] ++;
+					}
+					else { //Auto Dec
+						if (regs[REG_FSR1] == 0x00)
+							regs[REG_BSR1] --; //borrow
+						regs[REG_FSR1] --;
+					}
+				}
+				break;
+			case REG_INDF2:
+				ram[((regs[REG_BSR2] & 0x3F) << 7) | (regs[REG_FSR2] & 0x7F)] = byte;
+				if (regs[REG_POSTID] & BIT_FSR2PE) {
+					if (regs[REG_POSTID] & BIT_FSR2ID) { //Auto Inc
+						if (regs[REG_FSR2] == 0xFF)
+							regs[REG_BSR2] ++; //carry
+						regs[REG_FSR2] ++;
+					}
+					else { //Auto Dec
+						if (regs[REG_FSR2] == 0x00)
+							regs[REG_BSR2] --; //borrow
+						regs[REG_FSR2] --;
+					}
+				}
+				break;
             case REG_POSTID:
             case REG_LCDARH:
             case REG_LCDARL:
@@ -63,15 +160,13 @@ void mmio_write_byte(uint8_t addr, uint8_t byte) {
 }
 
 //Address:
-//0000-00FF: Regular memory one would expect
-//0100-017F: RAM Bank 0
-//0180-3FFF: Other RAM Banks
+//0000-1FFF: Banked memory plain address
 uint8_t mmio_mem_read_byte(uint16_t addr) {
-	return 0;//fix me
+	return ram[addr];
 }
 
 void mmio_mem_write_byte(uint16_t addr, uint8_t byte) {
-
+	ram[addr] = byte;
 }
 
 void mmio_init() {

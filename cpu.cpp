@@ -60,6 +60,17 @@ void cpu_reset() {
     mmio_reset();
 }
 
+void cpu_interrupt(uint32_t addr) {
+	uint8_t cpucon;
+	cpucon = mmio_read_byte_internal(REG_CPUCON);
+	if (cpucon & BIT_GLINT) {
+		cpu_push(pc);
+		pc = addr;
+		cpucon &= ~(BIT_GLINT);
+		mmio_write_byte_internal(REG_CPUCON);
+	}
+}
+
 uint8_t alu_add(uint8_t a, uint8_t b) {
     uint8_t result;
     

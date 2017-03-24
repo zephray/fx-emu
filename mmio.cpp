@@ -26,7 +26,11 @@ uint8_t mmio_read_byte(uint8_t addr) {
     if (addr&0x80) {
         return ram[(mem_page << 7) | addr & 0x7F];
     } else {
-        switch (addr) {
+		if ((addr >= 0x25) && (addr <= 0x3F) && (regs[REG_CPUCON] & BIT_WBK)) {
+			return ram_wbk[addr - 0x25];
+		}
+		else {
+			switch (addr) {
 			case REG_INDF0:
 				if (regs[REG_FSR0] & 0x80) {
 					byte = ram[((regs[REG_BSR] & 0x3F) << 7) | (regs[REG_FSR0] & 0x7F)];
@@ -74,16 +78,17 @@ uint8_t mmio_read_byte(uint8_t addr) {
 					}
 				}
 				break;
-            case REG_POSTID:
-            case REG_LCDARH:
-            case REG_LCDARL:
-            case REG_LCDDAT:
-            case REG_LCDCON: 
+			case REG_POSTID:
+			case REG_LCDARH:
+			case REG_LCDARL:
+			case REG_LCDDAT:
+			case REG_LCDCON:
 				byte = lcd_read_byte(addr);
-                break;
-            default: byte = regs[addr]; break;
-        }
-        return byte;
+				break;
+			default: byte = regs[addr]; break;
+			}
+			return byte;
+		}
     }
 }
 
@@ -100,8 +105,12 @@ void mmio_write_byte(uint8_t addr, uint8_t byte) {
     if (addr&0x80) {
         ram[(mem_page<<7)|addr&0x7F] = byte;
     } else {
-        regs[addr] = byte;//Do all write
-        switch (addr) {
+		if ((addr >= 0x25) && (addr <= 0x3F) && (regs[REG_CPUCON] & BIT_WBK)) {
+			ram_wbk[addr - 0x25] = byte;
+		}
+		else {
+			regs[addr] = byte;//Do all write
+			switch (addr) {
 			case REG_INDF0:
 				if (regs[REG_FSR0] & 0x80) {
 					ram[((regs[REG_BSR] & 0x3F) << 7) | (regs[REG_FSR0] & 0x7F)] = byte;
@@ -149,13 +158,14 @@ void mmio_write_byte(uint8_t addr, uint8_t byte) {
 					}
 				}
 				break;
-            case REG_POSTID:
-            case REG_LCDARH:
-            case REG_LCDARL:
-            case REG_LCDDAT:
-            case REG_LCDCON: lcd_write_byte(addr, byte);
-                             break;
-        }
+			case REG_POSTID:
+			case REG_LCDARH:
+			case REG_LCDARL:
+			case REG_LCDDAT:
+			case REG_LCDCON: lcd_write_byte(addr, byte);
+				break;
+			}
+		}
     }
 }
 

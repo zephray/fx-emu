@@ -3,6 +3,7 @@
 #include "cpu.hpp"
 #include "rom.hpp"
 #include "mmio.hpp"
+#include "timer.hpp"
 
 using namespace std;
 
@@ -25,6 +26,11 @@ int main(int argc, char * args[]) {
 	lcd = SDL_CreateRGBSurface(0, 96, 32, 32, 0, 0, 0, 0);
 
     rom_init();
+	mmio_init();
+	mmio_reset();
+	cpu_reset();
+	lcd_reset();
+	timer_reset();
     cpu_loop(150);
     
     printf("STATUS = %02x, A = %02x\n", mmio_read_byte(REG_STATUS), mmio_read_byte(REG_ACC));

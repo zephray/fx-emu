@@ -18,5 +18,6 @@ uint8_t lcd_ram_read_byte(uint16_t addr);
 void lcd_ram_write_byte(uint16_t addr, uint8_t byte);
 
 void lcd_flush(SDL_Surface *surface);
+void lcd_reset();
 void *lcd_save_state(size_t *size);
 void lcd_load_state(void *state);

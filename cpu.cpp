@@ -36,6 +36,7 @@ uint32_t cpu_pop() {
     stkptr = mmio_read_byte_internal(REG_STKPTR);
     if (stkptr > 0)
         stkptr--;
+	mmio_write_byte_internal(REG_STKPTR, stkptr);
     return stack[stkptr];
 }
 
@@ -46,7 +47,6 @@ void cpu_loop(uint32_t count) {
     cnt = count;
     while ((cnt!=0)&&((mode==MODE_SLOW)||(mode==MODE_FAST))) {
         instr = ((rom_read_word(pc) << 16) | rom_read_word(pc+1));
-        printf("PC=%04x, INSTR=%08x\n", pc, instr);
         cpu_interpret_instruction(instr);
         cnt --;
     }

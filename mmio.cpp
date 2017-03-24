@@ -2,6 +2,7 @@
 
 #include "mmio.hpp"
 #include "lcd.hpp"
+#include "timer.hpp"
 
 using namespace std;
 
@@ -12,11 +13,11 @@ uint8_t static ram[64*128];
 #define mem_page (uint16_t)(regs[REG_BSR]&0x3F)
 
 void mmio_bad_read_byte(uint8_t addr) {
-    
+	printf("Error: bad read byte @ %04x", addr);
 }
 
 void mmio_bad_write_byte(uint8_t addr) {
-
+	printf("Error: bad write byte @ %04x", addr);
 }
 
 //Address:
@@ -84,6 +85,18 @@ uint8_t mmio_read_byte(uint8_t addr) {
 			case REG_LCDDAT:
 			case REG_LCDCON:
 				byte = lcd_read_byte(addr);
+				break;
+			case REG_INTSTA:
+			case REG_TR0CON:
+			case REG_TRL0H:
+			case REG_TRL0L:
+			case REG_T0CH:
+			case REG_T0CL:
+			case REG_TR1CON:
+			case REG_TRL1:
+			case REG_TR2WCON:
+			case REG_TRL2:
+				byte = timer_read_byte(addr);
 				break;
 			default: byte = regs[addr]; break;
 			}
@@ -162,7 +175,20 @@ void mmio_write_byte(uint8_t addr, uint8_t byte) {
 			case REG_LCDARH:
 			case REG_LCDARL:
 			case REG_LCDDAT:
-			case REG_LCDCON: lcd_write_byte(addr, byte);
+			case REG_LCDCON: 
+				lcd_write_byte(addr, byte);
+				break;
+			case REG_INTSTA:
+			case REG_TR0CON:
+			case REG_TRL0H:
+			case REG_TRL0L:
+			case REG_T0CH:
+			case REG_T0CL:
+			case REG_TR1CON:
+			case REG_TRL1:
+			case REG_TR2WCON:
+			case REG_TRL2:
+				timer_write_byte(addr, byte);
 				break;
 			}
 		}

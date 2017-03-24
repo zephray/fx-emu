@@ -25,7 +25,7 @@ uint8_t lcd_read_byte(uint8_t addr) {
         }
     } else {
         byte = 0xFF;
-        //mmio_bad_read_byte(addr);
+        mmio_bad_read_byte(addr);
     }
     return byte;
 }
@@ -47,12 +47,12 @@ void lcd_write_byte(uint8_t addr, uint8_t byte) {
             case REG_LCDARL:
             if (byte > 0x61) {
                 lcd_reg[addr] = 0x00; 
-                //mmio_bad_write_byte(addr);
+                mmio_bad_write_byte(addr);
             }
             break;
         }
     } else {
-        //mmio_bad_write_byte(addr);
+        mmio_bad_write_byte(addr);
     }
 }
 
@@ -62,6 +62,11 @@ uint8_t lcd_ram_read_byte(uint16_t addr) {
 
 void lcd_ram_write_byte(uint16_t addr, uint8_t byte) {
     lcd_fb[(addr/96)*128+(addr%96)] = byte;
+}
+
+void lcd_reset() {
+	int i;
+	for (i = 0; i < 0x30; i++) lcd_reg[i] = 0;
 }
 
 void lcd_flush(SDL_Surface *surface) {

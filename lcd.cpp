@@ -11,7 +11,7 @@ uint8_t lcd_read_byte(uint8_t addr) {
     if (addr < 0x30) {
         switch (addr) {
             case REG_LCDDAT:
-            byte = lcd_fb[((lcd_reg[REG_LCDARH]&0x03)<<7)|(lcd_reg[REG_LCDARL])];
+            byte = lcd_fb[(((uint16_t)(lcd_reg[REG_LCDARH]&0x03))<<7)|(lcd_reg[REG_LCDARL])];
             if (lcd_reg[REG_POSTID] & 0x04) { //LCDPE ON
                 if (lcd_reg[REG_POSTID] & 0x40) { //Auto Increase
                     if (lcd_reg[REG_LCDARL] < 0x61) lcd_reg[REG_LCDARL]++;
@@ -38,15 +38,14 @@ void lcd_write_byte(uint8_t addr, uint8_t byte) {
             lcd_fb[((lcd_reg[REG_LCDARH]&0x03)<<7)|(lcd_reg[REG_LCDARL])] = byte;
             if (lcd_reg[REG_POSTID] & 0x04) { //LCDPE ON
                 if (lcd_reg[REG_POSTID] & 0x40) { //Auto Increase
-                    if (lcd_reg[REG_LCDARL] < 0x61) lcd_reg[REG_LCDARL]++;
+					if (lcd_reg[REG_LCDARL] < 0x61) lcd_reg[REG_LCDARL]++; else { lcd_reg[REG_LCDARL] = 0; lcd_reg[REG_LCDARH]++; }
                 } else {
-                    if (lcd_reg[REG_LCDARL] > 0x00) lcd_reg[REG_LCDARL]--;
+                    if (lcd_reg[REG_LCDARL] > 0x00) lcd_reg[REG_LCDARL]--; else { lcd_reg[REG_LCDARL] = 0x61; lcd_reg[REG_LCDARH]--; }
                 }
             }
             break;
-            case REG_LCDARL:
             if (byte > 0x61) {
-                lcd_reg[addr] = 0x00; 
+                lcd_reg[addr] = byte; 
                 mmio_bad_write_byte(addr);
             }
             break;

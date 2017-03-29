@@ -4,6 +4,7 @@
 
 #include "timer.hpp"
 #include "cpu.hpp"
+#include "mmio.hpp"
 
 static uint8_t timer_reg[0x30];//many are not used
 
@@ -16,11 +17,12 @@ void timer_recalc_0() {
 	uint16_t prescaler0[] = { 1, 4, 16, 64 };
 	uint16_t rrl;
 	rrl = (uint16_t)timer_reg[REG_TRL0H] << 8 | timer_reg[REG_TRL0L];
-	ttl = (timer_reg[REG_TR0CON] & BIT_T0CS) ? (FHOSC / 2) : (FOSC);
+	ttl = (float)((timer_reg[REG_TR0CON] & BIT_T0CS) ? (FHOSC / 2) : (FOSC));
 	ttl = (1 / ttl) * prescaler0[(timer_reg[REG_TR0CON]) & 0x03] * (rrl + 1);
 	ttl *= 1000; //s -> ms
-	timer1_rrl = (int32_t)ttl;
-	timer1_val = timer1_rrl;
+	timer0_rrl = (int32_t)ttl;
+	timer0_val = timer0_rrl;
+	printf("timer1 val %04x\n", timer0_rrl);
 }
 
 void timer_recalc_1() {
@@ -28,7 +30,7 @@ void timer_recalc_1() {
 	uint16_t prescaler1[] = { 4, 16, 64, 256 };
 	uint16_t rrl;
 	rrl = timer_reg[REG_TRL1];
-	ttl = FOSC;
+	ttl = (float)FOSC;
 	ttl = (1 / ttl) * prescaler1[(timer_reg[REG_TR1CON]) & 0x03] * (rrl + 1);
 	ttl *= 1000; //s -> ms
 	timer1_rrl = (int32_t)ttl;
@@ -40,11 +42,11 @@ void timer_recalc_2() {
 	uint16_t prescaler2[] = { 1, 2, 4, 8 };
 	uint16_t rrl;
 	rrl = timer_reg[REG_TRL2];
-	ttl = (timer_reg[REG_TR2WCON] & BIT_T2CS) ? (FHOSC / 2) : (FOSC);
+	ttl = (float)((timer_reg[REG_TR2WCON] & BIT_T2CS) ? (FHOSC / 2) : (FOSC));
 	ttl = (1 / ttl) * prescaler2[(timer_reg[REG_TR0CON]) & 0x03] * (rrl + 1);
 	ttl *= 1000; //s -> ms
 	timer2_rrl = (int32_t)ttl;
-	timer2_val = timer1_rrl;
+	timer2_val = timer2_rrl;
 }
 
 uint8_t timer_read_byte(uint8_t addr) {
@@ -111,12 +113,15 @@ void timer_tick() {
 				timer_reg[REG_INTSTA] |= BIT_TMR1I;
 				cpu_interrupt(ADDR_TIMINT);
 			}
+			if (timer_reg[REG_TR1CON] & BIT_T1WKEN) {
+				cpu_wake(WAKE_TIMER);
+			}
 		}
 	}
 	if (timer_reg[REG_TR2WCON] & BIT_T2EN) {
-		timer0_val -= time_diff;
-		if (timer0_val <= 0) {
-			timer0_val = timer0_rrl;
+		timer2_val -= time_diff;
+		if (timer2_val <= 0) {
+			timer2_val = timer2_rrl;
 			if (timer_reg[REG_TR2WCON] & BIT_TMR2IE) {
 				timer_reg[REG_INTSTA] |= BIT_TMR2I;
 				cpu_interrupt(ADDR_TIMINT);

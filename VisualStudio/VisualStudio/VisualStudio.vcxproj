@@ -120,10 +120,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\cpu.cpp" />
+    <ClCompile Include="..\..\eps.cpp" />
+    <ClCompile Include="..\..\kbd.cpp" />
     <ClCompile Include="..\..\lcd.cpp" />
     <ClCompile Include="..\..\main.cpp" />
     <ClCompile Include="..\..\mmio.cpp" />
     <ClCompile Include="..\..\rom.cpp" />
+    <ClCompile Include="..\..\timer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

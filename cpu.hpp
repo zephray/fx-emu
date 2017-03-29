@@ -8,6 +8,7 @@ void cpu_push(uint32_t dat);
 uint32_t cpu_pop();
 void cpu_loop(uint32_t count);
 void cpu_reset();
+void cpu_wake(uint8_t source);
 void cpu_interrupt(uint32_t addr);
 void cpu_interpret_instruction(uint32_t instr);
 void *cpu_save_state(size_t *size);

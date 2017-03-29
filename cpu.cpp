@@ -24,6 +24,7 @@ void cpu_push(uint32_t dat) {
     uint8_t stkptr;
     stkptr = mmio_read_byte_internal(REG_STKPTR);
     stack[stkptr] = dat;
+	//printf("PUSH %04x to %02x\n", dat, stkptr);
     if (stkptr < 32)
         stkptr++;
     else 
@@ -37,6 +38,7 @@ uint32_t cpu_pop() {
     if (stkptr > 0)
         stkptr--;
 	mmio_write_byte_internal(REG_STKPTR, stkptr);
+	//printf("POP %04x from %02x\n", stack[stkptr], stkptr);
     return stack[stkptr];
 }
 
@@ -66,8 +68,20 @@ void cpu_interrupt(uint32_t addr) {
 	if (cpucon & BIT_GLINT) {
 		cpu_push(pc);
 		pc = addr;
+		mmio_write_byte_internal(REG_PCL, pc & 0xFF);
+		mmio_write_byte_internal(REG_PCM, (pc >> 8) & 0xFF);
+		mmio_write_byte_internal(REG_PCH, (pc >> 16) & 0xFF);
 		cpucon &= ~(BIT_GLINT);
-		mmio_write_byte_internal(REG_CPUCON);
+		mmio_write_byte_internal(REG_CPUCON, cpucon);
+	}
+	else {
+		//printf("GLINT OFF\n");
+	}
+}
+
+void cpu_wake(uint8_t source) {
+	if ((source == WAKE_PAINT)||((source == WAKE_TIMER)&&(mode==MODE_IDLE))) {
+		mode = MODE_FAST;
 	}
 }
 
@@ -80,7 +94,9 @@ uint8_t alu_add(uint8_t a, uint8_t b) {
     status_ov_add(a, b, result);
     status_sle(!(result&0x80));//Working weird
     status_sge(result&0x80);
-    
+	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
+	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
+
     return result;
 }
 
@@ -90,9 +106,11 @@ uint8_t alu_adc(uint8_t a, uint8_t b, uint8_t c) {
     result = a + b + c;
     status_zero(result);
     status_carry(((uint16_t)a+(uint16_t)b+(uint16_t)c)&0x100);
-    status_ov(((uint16_t)a+(uint16_t)b+(uint16_t)c)>0x7F);
+    status_ov(((int16_t)a+(int16_t)b+(int16_t)c)>0x7F);
     status_sle(!(result&0x80));//Working weird
     status_sge(result&0x80);
+	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
+	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
     
     return result;
 }
@@ -106,6 +124,8 @@ uint8_t alu_sub(uint8_t a, uint8_t b) {
     status_ov_sub(a, b, result);
     status_sle(!(result&0x80));//Working weird
     status_sge(result&0x80);
+	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
+	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
 
     return result;
 }
@@ -116,9 +136,11 @@ uint8_t alu_subb(uint8_t a, uint8_t b, uint8_t c) {
     result = a - b - c;
     status_zero(result);
     status_carry(!(a<(b+c)));
-    status_ov(((int16_t)a-(int16_t)b-(int16_t)c)<(0-0x7F));
+    status_ov(((int16_t)a-(int16_t)b-(int16_t)c)<(0-0x80));
     status_sle(!(result&0x80));//Working weird
     status_sge(result&0x80);
+	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
+	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
 
     return result;
 }
@@ -158,7 +180,6 @@ void cpu_interpret_instruction(uint32_t instr) {
     uint8_t  temp8_1, temp8_2, temp8_3;  //instruction related temp
     uint16_t temp16; //instruction related temp
     uint32_t temp32; //instruction related temp
-    
 
     instr1 = instr >> 16;
     newpc = pc + 1;
@@ -176,15 +197,15 @@ void cpu_interpret_instruction(uint32_t instr) {
                      if (temp8_1 & 0x02) mode = MODE_IDLE;
                      else mode = MODE_SLEEP;
                      break;  //slep
-        case 0x2BFE: temp8_1 = mmio_read_byte_internal(REG_CPUCON);
-                     temp8_1 |= 0x04; 
+        case 0x2BFF: temp8_1 = mmio_read_byte_internal(REG_CPUCON);
+                     temp8_1 |= BIT_GLINT;
                      mmio_write_byte_internal(REG_CPUCON, temp8_1);
                      //reti, enable interrupt and run through
-        case 0x2BFF: newpc = cpu_pop();
+        case 0x2BFE: newpc = cpu_pop();
                      break;//ret
         default: //no match
         switch (instr1 & 0xFFFE) {
-            case 0x0030: cpu_push(newpc); //run through
+            case 0x0030: cpu_push(newpc+1); //pc+2, lcall 2bytes
             case 0x0020: imm32_1 = instr & 0x0001FFFF;
                          newpc = imm32_1;
                          break;
@@ -194,6 +215,7 @@ void cpu_interpret_instruction(uint32_t instr) {
 			imm8_2 = (instr1 & 0x0700) >> 8; //used in JBC/JBS/BC/BS/BTG
             switch (instr1 & 0xFF00) {
                 case 0x2000: mmio_write_byte_internal(REG_ACC, mmio_read_byte(imm8_1));
+							 status_zero(mmio_read_byte_internal(REG_ACC));
                              break;//mov a, r
                 case 0x2100: mmio_write_byte(imm8_1, mmio_read_byte_internal(REG_ACC));
                              break;//mov r, a
@@ -201,11 +223,12 @@ void cpu_interpret_instruction(uint32_t instr) {
                              break;//mov r, #
                 case 0x2500: status_zero(mmio_read_byte(imm8_1));
                              break;//test r
-                case 0x2700: rpt_counter = mmio_read_byte(imm8_1);
+                case 0x2700: rpt_counter = mmio_read_byte(imm8_1) - 1;
                              break;//rpt r
-                case 0x8300: mmio_write_byte_internal(REG_BSR, imm8_1);
+                case 0x4300: mmio_write_byte_internal(REG_BSR, imm8_1);
                              break;//bank #
                 case 0x2400: mmio_write_byte(imm8_1, 0);
+					         status_zero(0);
                              break;//clr r
                 case 0x4000: mmio_write_byte_internal(REG_TABPTRL, imm8_1);
                              break;//tbptl #
@@ -310,13 +333,13 @@ void cpu_interpret_instruction(uint32_t instr) {
                                 status&0x01));
                              break;//adc a, #
                 case 0x1E00: temp8_1 = mmio_read_byte(imm8_1);
-                             status_carry(!(imm8_1<1));
+                             status_carry((temp8_1<1));
                              temp8_1 -= 1; 
                              status_zero(temp8_1);
                              mmio_write_byte_internal(REG_ACC, temp8_1);
                              break;//deca r
                 case 0x1F00: temp8_1 = mmio_read_byte(imm8_1);
-                             status_carry(!(imm8_1<1));
+                             status_carry((temp8_1<1));
                              temp8_1 -= 1; 
                              status_zero(temp8_1);
                              mmio_write_byte(imm8_1, temp8_1);
@@ -455,23 +478,31 @@ void cpu_interpret_instruction(uint32_t instr) {
 							 break;//swapa r
 				case 0x5000: temp8_1 = mmio_read_byte(imm8_1) - 1;
 							 if (temp8_1 != 0) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 mmio_write_byte_internal(REG_ACC, temp8_1);
 					         break;//jdnz a, r, addr
 				case 0x5100: temp8_1 = mmio_read_byte(imm8_1) - 1;
 							 if (temp8_1 != 0) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 mmio_write_byte(imm8_1, temp8_1);
 							 break;//jdnz r, addr
 				case 0x4700: if (mmio_read_byte_internal(REG_ACC) >= imm8_1) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 break;//jge a, #k, addr
 				case 0x4800: if (mmio_read_byte_internal(REG_ACC) <= imm8_1) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 break;//jle a, #k, addr
 				case 0x4900: if (mmio_read_byte_internal(REG_ACC) == imm8_1) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 break;//je a, #k, addr
 				case 0x5500: if (mmio_read_byte_internal(REG_ACC) >= mmio_read_byte(imm8_1)) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 break;//jge a, r, addr
 				case 0x5600: if (mmio_read_byte_internal(REG_ACC) <= mmio_read_byte(imm8_1)) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 break;//jle a, r, addr
 				case 0x5700: if (mmio_read_byte_internal(REG_ACC) == mmio_read_byte(imm8_1)) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+							 else { newpc += 1; }
 							 break;//je a, r, addr
 				default: //no match (OP CODE MASK 0xFF)
 					if ((instr1 & 0xFC00) == 0x2C00) { //OP CODE MASK 0xFC, TBRD opt, r
@@ -503,9 +534,11 @@ void cpu_interpret_instruction(uint32_t instr) {
 										 mmio_write_byte(imm8_1, temp8_1);
 										 break; //btg r, b
 							case 0x5800: if (!(mmio_read_byte(imm8_1) & (1 << imm8_2))) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+										 else { newpc += 1; }
 										 break; //jbc r, b, addr
-							case 0x6000: if (!(mmio_read_byte(imm8_1) & (1 << imm8_2))) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
-										 break; //jbc r, b, addr
+							case 0x6000: if ((mmio_read_byte(imm8_1) & (1 << imm8_2))) { newpc &= 0xFFFF0000; newpc |= imm16_1; }
+										 else { newpc += 1; }
+										 break; //jbs r, b, addr
 							default: //no match (OP CODE MASK 0xF8)
 								if ((instr1 & 0xF000) == 0x3000) { //OP CODE MASK 0xF0 S0CALL
 									cpu_push(newpc);

@@ -1,8 +1,16 @@
 //ePS6800 Common
 #pragma once
 
+void eps_init();
+void eps_reset();
+void eps_run();
+void eps_deinit();
+
 #define FOSC        32768
 #define FHOSC       500000
+
+#define WAKE_TIMER  0x00
+#define WAKE_PAINT  0x01
 
 #define REG_INDF0   0x00
 #define REG_FSR0    0x01
@@ -38,6 +46,22 @@
 #define REG_TR2WCON 0x2C
 #define REG_TRL2    0x2D
 #define REG_LCDCON  0x2E
+#define REG_STBCON  0x30
+#define REG_PORTA   0x31
+#define REG_PACON   0x32
+#define REG_DCRA    0x33
+#define REG_PAWAKE  0x34
+#define REG_PAINTEN 0x35
+#define REG_PAINTSTA 0x36
+#define REG_PORTB   0x37
+#define REG_PBCON   0x38
+#define REG_DCRB    0x39
+#define REG_PORTC   0x3A
+#define REG_PCCON   0x3B
+#define REG_DCRC    0x3C
+#define REG_PORTD   0x3D
+#define REG_PORTE   0x3E
+#define REG_DCRDE   0x3F
 
 //POSTID
 #define BIT_FSR0PE	0x01

@@ -8,4 +8,4 @@ void rom_init();
 //Address: 17bit word(16-bit) address
 uint16_t rom_read_word(uint32_t addr);
 
-void rom_open(std::string filename);
+void rom_open(const char * filename);

@@ -15,8 +15,31 @@ uint8_t kbd_get_matrix(uint8_t scan) {
 		if (!(scan & (1 << i))) result |= kbd_matrix[i];
 	}
 	result |= onbit;
-	printf("\nReturning result %02x Scan %02x\n", result, scan);
-	return ~result; //fuck you
+	//printf("\nReturning result %02x Scan %02x\n", result, scan);
+	return ~result;
+}
+
+uint8_t kbd_get_pb() {
+	return ~((~kbd_reg[REG_PORTB]) & (~kbd_reg[REG_DCRB]));
+}
+
+uint8_t kbd_get_pa() {
+	return kbd_get_matrix(kbd_get_pb()) & kbd_reg[REG_DCRA] & kbd_reg[REG_PACON];
+}
+
+void kbd_processint() {
+	unsigned char pa;
+
+	pa = ~kbd_get_pa();
+	//printf("GETPB %02x, PB %02x, PBCON %02x, GETPA %02x, PAINTEN %02x\n", kbd_get_pb(), kbd_reg[REG_PORTB], kbd_reg[REG_PBCON], kbd_get_pa(), kbd_reg[REG_PAINTEN]);
+	if (pa & kbd_reg[REG_PAINTEN]) {
+		//printf("going to interrupt with %02x\n", pa);
+		kbd_reg[REG_PAINTSTA] = pa & kbd_reg[REG_PAINTEN];
+		cpu_interrupt(ADDR_PAINT);
+	}
+	if (pa & kbd_reg[REG_PAWAKE]) {
+		cpu_wake(WAKE_PAINT);
+	}
 }
 
 uint8_t kbd_read_byte(uint8_t addr) {
@@ -24,8 +47,10 @@ uint8_t kbd_read_byte(uint8_t addr) {
 	if (addr < 0x40) {
 		switch (addr) {
 		case REG_PORTA:
-			byte = (kbd_get_matrix(kbd_reg[REG_PORTB]) & kbd_reg[REG_DCRA] & kbd_reg[REG_PACON]) |
-					(kbd_reg[REG_PORTA] & (~kbd_reg[REG_DCRA]));
+			byte = ((kbd_get_pa()) |
+					(kbd_reg[REG_PORTA] & (~kbd_reg[REG_DCRA])));
+			mmio_bad_read_byte(addr);
+			printf("GETPB %02x, PB %02x, DCRB %02x, GETPA %02x, PAINTEN %02x\n", kbd_get_pb(), kbd_reg[REG_PORTB], kbd_reg[REG_DCRB], kbd_get_pa(), kbd_reg[REG_PAINTEN]);
 			printf("Reading PortA, returning %02x.\n", byte);
 			break;
 		case REG_PORTB:
@@ -54,6 +79,9 @@ uint8_t kbd_read_byte(uint8_t addr) {
 void kbd_write_byte(uint8_t addr, uint8_t byte) {
 	if (addr < 0x40) {
 		kbd_reg[addr] = byte;
+		if (addr == REG_DCRB) {
+			kbd_processint();
+		}
 	}
 	else {
 		mmio_bad_write_byte(addr);
@@ -64,16 +92,8 @@ void kbd_keydown(uint8_t key) {
 	int row = key / 7;
 	int col = key % 7;
 	kbd_matrix[row] |= 1 << col;
-	printf("PACON %02x, DCRA %02x, PAINTEN %02x, PAWAKE %02x", kbd_reg[REG_PACON], kbd_reg[REG_DCRA], kbd_reg[REG_PAINTEN], kbd_reg[REG_PAWAKE]);
-	if ((kbd_reg[REG_PACON] & (1 << col)) & (kbd_reg[REG_DCRA] & (1 << col))) {
-		if (kbd_reg[REG_PAINTEN] & (1 << col)) {
-			kbd_reg[REG_PAINTSTA] |= (1 << col);
-			cpu_interrupt(ADDR_PAINT);
-		}
-		if (kbd_reg[REG_PAWAKE] & (1 << col)) {
-			cpu_wake(WAKE_PAINT);
-		}
-	}
+	//printf("PACON %02x, DCRA %02x, PAINTEN %02x, PAWAKE %02x", kbd_reg[REG_PACON], kbd_reg[REG_DCRA], kbd_reg[REG_PAINTEN], kbd_reg[REG_PAWAKE]);
+	kbd_processint();
 }
 
 void kbd_keyup(uint8_t key) {

@@ -7,7 +7,7 @@ enum cpu_mode { MODE_SLOW, MODE_FAST, MODE_IDLE, MODE_SLEEP};
 
 uint8_t status; //r0fh
 uint32_t pc; //program counter
-uint32_t stack[32];//very niubility stack
+uint32_t stack[32];//stack
 uint8_t rpt_counter; //rpt counter
 enum cpu_mode mode;
 
@@ -73,6 +73,7 @@ void cpu_interrupt(uint32_t addr) {
 		mmio_write_byte_internal(REG_PCH, (pc >> 16) & 0xFF);
 		cpucon &= ~(BIT_GLINT);
 		mmio_write_byte_internal(REG_CPUCON, cpucon);
+		//printf("Accpeted Interrupt Execution %04x", addr);
 	}
 	else {
 		//printf("GLINT OFF\n");
@@ -85,62 +86,78 @@ void cpu_wake(uint8_t source) {
 	}
 }
 
+uint8_t cpu_get_status() {
+	return status;
+}
+
+void cpu_set_status(uint8_t _status) {
+	status = _status;
+}
+
 uint8_t alu_add(uint8_t a, uint8_t b) {
     uint8_t result;
+	int8_t aa, bb;
+	int16_t rresult;
     
     result = a + b;
+	aa = *(int8_t *)(&a); bb = *(int8_t *)(&b);
+	rresult = aa + bb;
     status_zero(result);
     status_carry(((uint16_t)a+(uint16_t)b)&0x100);
-    status_ov_add(a, b, result);
-    status_sle(!(result&0x80));//Working weird
-    status_sge(result&0x80);
-	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
-	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
+	status_ov(rresult > 0x7f);
+	status_sge(rresult >= 0);
+	status_sle(rresult <= 0);
 
     return result;
 }
 
 uint8_t alu_adc(uint8_t a, uint8_t b, uint8_t c) {
     uint8_t result;
+	int8_t aa, bb, cc;
+	int16_t rresult;
     
     result = a + b + c;
+	aa = *(int8_t *)(&a); bb = *(int8_t *)(&b); cc = *(int8_t *)(&c);
+	rresult = aa + bb + cc;
     status_zero(result);
     status_carry(((uint16_t)a+(uint16_t)b+(uint16_t)c)&0x100);
-    status_ov(((int16_t)a+(int16_t)b+(int16_t)c)>0x7F);
-    status_sle(!(result&0x80));//Working weird
-    status_sge(result&0x80);
-	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
-	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
+	status_ov(rresult > 0x7f);
+	status_sge(rresult >= 0);
+	status_sle(rresult <= 0);
     
     return result;
 }
 
 uint8_t alu_sub(uint8_t a, uint8_t b) {
     uint8_t result;
+	int8_t aa, bb;
+	int16_t rresult;
 
     result = a - b;
+	aa = *(int8_t *)(&a); bb = *(int8_t *)(&b);
+	rresult = (int16_t)aa - (int16_t)bb;
     status_zero(result);
-    status_carry(!(a<b));
-    status_ov_sub(a, b, result);
-    status_sle(!(result&0x80));//Working weird
-    status_sge(result&0x80);
-	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
-	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
+	status_carry(!(rresult<0));
+	status_ov(rresult<(0 - 0x80));
+	status_sge(rresult >= 0);
+	status_sle(rresult <= 0);
 
     return result;
 }
 
 uint8_t alu_subb(uint8_t a, uint8_t b, uint8_t c) {
     uint8_t result;
+	int8_t aa, bb, cc;
+	int16_t rresult;//result without being trunked
 
     result = a - b - c;
+	aa = *(int8_t *)(&a); bb = *(int8_t *)(&b); cc = *(int8_t *)(&c);
+	rresult = (int16_t)aa - (int16_t)bb - (int16_t)cc;
     status_zero(result);
-    status_carry(!(a<(b+c)));
-    status_ov(((int16_t)a-(int16_t)b-(int16_t)c)<(0-0x80));
-    status_sle(!(result&0x80));//Working weird
-    status_sge(result&0x80);
-	if ((status & 0x08) && (status & 0x20)) result &= ~0x80;//overflow
-	if ((status & 0x08) && (status & 0x10)) result |= 0x80;//underflow
+    status_carry(!(rresult<0));
+    status_ov(rresult<(0-0x80));
+    status_sge(rresult >= 0);
+	status_sle(rresult <= 0);
 
     return result;
 }
@@ -183,7 +200,7 @@ void cpu_interpret_instruction(uint32_t instr) {
 
     instr1 = instr >> 16;
     newpc = pc + 1;
-    status = mmio_read_byte_internal(REG_STATUS);
+    //status = mmio_read_byte_internal(REG_STATUS);
 
     if (rpt_counter != 0) {
         newpc = pc;
@@ -581,7 +598,7 @@ void cpu_interpret_instruction(uint32_t instr) {
 	else {
 		pc = mempc; //Load PC with PC in the register set
 	}
-    mmio_write_byte_internal(REG_STATUS, status);
+    //mmio_write_byte_internal(REG_STATUS, status);
     
 }
 

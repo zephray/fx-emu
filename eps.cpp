@@ -37,10 +37,7 @@ void eps_reset() {
 void eps_process_key(SDL_Event &event) {
 	uint8_t key;//scan code, 50 for on
 	switch (event.key.keysym.sym) {
-	case SDLK_a:
-		printf("ON!\n");
-		key = 50;
-		break;
+	case SDLK_a: key = 50;break;
 	case SDLK_b: key = 0; break;
 	case SDLK_c: key = 1; break;
 	case SDLK_d: key = 2; break;
@@ -70,7 +67,7 @@ void eps_process_key(SDL_Event &event) {
 		key = 0;
 		break;
 	}
-	if (event.key.type == SDL_KEYUP) {
+	if (event.type == SDL_KEYUP) {
 		printf("Released ");
 		if (key == 50) kbd_onup(); else
 			kbd_keyup(key);
@@ -94,12 +91,9 @@ void eps_run() {
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			case SDL_KEYDOWN:
-				printf("SDL Keydown\n");
-				//eps_process_key(event);
-				break;
 			case SDL_KEYUP:
-				printf("SDL Keyup\n");
-				//eps_process_key(event);
+				if (event.key.repeat == 0)
+					eps_process_key(event);
 				break;
 			case SDL_QUIT:
 				quit = 1;

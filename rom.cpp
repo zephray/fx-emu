@@ -24,10 +24,17 @@ void rom_init() {
     rom[4] = 0x0020;//Inf loop
     rom[5] = 0x0004;*/
 	//ALU Test 2 SUB
-	rom[0] = 0x4E; rom[1] = 0x50;//A=0x50;
+	/*rom[0] = 0x4E; rom[1] = 0x50;//A=0x50;
 	rom[2] = 0x4C; rom[3] = 0x90;//SUB A, #90
 	rom[4] = 0x00; rom[5] = 0x20;
-	rom[6] = 0x00; rom[7] = 0x02;
+	rom[6] = 0x00; rom[7] = 0x02;*/
+	//RRC Test
+	rom[0] = 0x4E; rom[1] = 0x50;//A=0x50;
+	rom[2] = 0x70; rom[3] = 0x0F;//BS r0fh, 0
+	//rom[4] = 0x00; rom[5] = 0x00;//NOP
+	rom[4] = 0x0B; rom[5] = 0x0A;//RRC ACC
+	rom[6] = 0x00; rom[7] = 0x20;
+	rom[8] = 0x00; rom[9] = 0x03; 
 }
 
 uint16_t rom_read_word(uint32_t addr) {

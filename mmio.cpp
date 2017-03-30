@@ -4,6 +4,7 @@
 #include "lcd.hpp"
 #include "timer.hpp"
 #include "kbd.hpp"
+#include "cpu.hpp"
 
 using namespace std;
 
@@ -14,11 +15,65 @@ uint8_t static ram[64*128];
 #define mem_page (uint16_t)(regs[REG_BSR]&0x3F)
 
 void mmio_bad_read_byte(uint8_t addr) {
-	printf("Error: bad read byte @ %04x", addr);
+	printf("Error: bad read byte @ %04x\n", addr);
+	printf("PC: %02x%02x, ALU: %02x, STATUS: %02x\n", mmio_read_byte_internal(REG_PCM), mmio_read_byte_internal(REG_PCL), mmio_read_byte_internal(REG_ACC), mmio_read_byte_internal(REG_STATUS));
+
 }
 
 void mmio_bad_write_byte(uint8_t addr) {
-	printf("Error: bad write byte @ %04x", addr);
+	printf("Error: bad write byte @ %04x\n", addr);
+	printf("PC: %02x%02x, ALU: %02x, STATUS: %02x\n", mmio_read_byte_internal(REG_PCM), mmio_read_byte_internal(REG_PCL), mmio_read_byte_internal(REG_ACC), mmio_read_byte_internal(REG_STATUS));
+}
+
+void mmio_process_postid_0() {
+	if (regs[REG_POSTID] & BIT_FSR0PE) {
+		if (regs[REG_POSTID] & BIT_FSR0ID) { //Auto Inc
+			regs[REG_FSR0] ++;
+		}
+		else { //Auto Dec
+			regs[REG_FSR0] --;
+		}
+	}
+}
+
+void mmio_process_postid_1() {
+	if (regs[REG_POSTID] & BIT_FSR1PE) {
+		if (regs[REG_POSTID] & BIT_FSR1ID) { //Auto Inc
+			if (regs[REG_FSR1] == 0xFF) {
+				regs[REG_BSR1] ++; //carry
+				regs[REG_BSR1] = 0x80;
+			} else
+				regs[REG_FSR1] ++;
+		}
+		else { //Auto Dec
+			if (regs[REG_FSR1] == 0x80) {
+				regs[REG_BSR1] --; //borrow
+				regs[REG_FSR1] = 0xFF;
+			} else
+				regs[REG_FSR1] --;
+		}
+	}
+}
+
+void mmio_process_postid_2() {
+	if (regs[REG_POSTID] & BIT_FSR2PE) {
+		if (regs[REG_POSTID] & BIT_FSR2ID) { //Auto Inc
+			if (regs[REG_FSR2] == 0xFF) {
+				regs[REG_BSR2] ++; //carry
+				regs[REG_BSR2] = 0x80;
+			}
+			else
+				regs[REG_FSR2] ++;
+		}
+		else { //Auto Dec
+			if (regs[REG_FSR2] == 0x80) {
+				regs[REG_BSR2] --; //borrow
+				regs[REG_FSR2] = 0xFF;
+			}
+			else
+				regs[REG_FSR2] --;
+		}
+	}
 }
 
 //Address:
@@ -33,52 +88,26 @@ uint8_t mmio_read_byte(uint8_t addr) {
 		}
 		else {
 			switch (addr) {
+			case REG_STATUS:
+				byte = cpu_get_status();
+				break;
 			case REG_INDF0:
 				if (regs[REG_FSR0] & 0x80) {
 					byte = ram[((uint16_t)(regs[REG_BSR] & 0x3F) << 7) | (regs[REG_FSR0] & 0x7F)];
 				}
 				else {
-					if (regs[REG_BSR] != 0) mmio_bad_read_byte(addr);
+					//if (regs[REG_BSR] != 0) mmio_bad_read_byte(addr);
 					byte = regs[REG_FSR0];
 				}
-				if (regs[REG_POSTID] & BIT_FSR0PE) {
-					if (regs[REG_POSTID] & BIT_FSR0ID) { //Auto Inc
-						regs[REG_FSR0] ++;
-					}
-					else { //Auto Dec
-						regs[REG_FSR0] --;
-					}
-				}
+				mmio_process_postid_0();
 				break;
 			case REG_INDF1:
 				byte = ram[((uint16_t)(regs[REG_BSR1] & 0x3F) << 7) | (regs[REG_FSR1] & 0x7F)];
-				if (regs[REG_POSTID] & BIT_FSR1PE) {
-					if (regs[REG_POSTID] & BIT_FSR1ID) { //Auto Inc
-						if (regs[REG_FSR1] == 0xFF)
-							regs[REG_BSR1] ++; //carry
-						regs[REG_FSR1] ++;
-					}
-					else { //Auto Dec
-						if (regs[REG_FSR1] == 0x00)
-							regs[REG_BSR1] --; //borrow
-						regs[REG_FSR1] --;
-					}
-				}
+				mmio_process_postid_1();
 				break;
 			case REG_INDF2:
 				byte = ram[((uint16_t)(regs[REG_BSR2] & 0x3F) << 7) | (regs[REG_FSR2] & 0x7F)];
-				if (regs[REG_POSTID] & BIT_FSR2PE) {
-					if (regs[REG_POSTID] & BIT_FSR2ID) { //Auto Inc
-						if (regs[REG_FSR2] == 0xFF)
-							regs[REG_BSR2] ++; //carry
-						regs[REG_FSR2] ++;
-					}
-					else { //Auto Dec
-						if (regs[REG_FSR2] == 0x00)
-							regs[REG_BSR2] --; //borrow
-						regs[REG_FSR2] --;
-					}
-				}
+				mmio_process_postid_2();
 				break;
 			case REG_POSTID:
 			case REG_LCDARH:
@@ -140,52 +169,26 @@ void mmio_write_byte(uint8_t addr, uint8_t byte) {
 		else {
 			regs[addr] = byte;//Do all write
 			switch (addr) {
+			case REG_STATUS:
+				cpu_set_status(byte);
+				break;
 			case REG_INDF0:
 				if (regs[REG_FSR0] & 0x80) {
 					ram[((uint16_t)(regs[REG_BSR] & 0x3F) << 7) | (regs[REG_FSR0] & 0x7F)] = byte;
 				}
 				else {
-					if (regs[REG_BSR] != 0) mmio_bad_read_byte(addr);
+					//if (regs[REG_BSR] != 0) mmio_bad_read_byte(addr);
 					regs[REG_FSR0] = byte;
 				}
-				if (regs[REG_POSTID] & BIT_FSR0PE) {
-					if (regs[REG_POSTID] & BIT_FSR0ID) { //Auto Inc
-						regs[REG_FSR0] ++;
-					}
-					else { //Auto Dec
-						regs[REG_FSR0] --;
-					}
-				}
+				mmio_process_postid_0();
 				break;
 			case REG_INDF1:
 				ram[((uint16_t)(regs[REG_BSR1] & 0x3F) << 7) | (regs[REG_FSR1] & 0x7F)] = byte;
-				if (regs[REG_POSTID] & BIT_FSR1PE) {
-					if (regs[REG_POSTID] & BIT_FSR1ID) { //Auto Inc
-						if (regs[REG_FSR1] == 0xFF)
-							regs[REG_BSR1] ++; //carry
-						regs[REG_FSR1] ++;
-					}
-					else { //Auto Dec
-						if (regs[REG_FSR1] == 0x00)
-							regs[REG_BSR1] --; //borrow
-						regs[REG_FSR1] --;
-					}
-				}
+				mmio_process_postid_1();
 				break;
 			case REG_INDF2:
 				ram[((uint16_t)(regs[REG_BSR2] & 0x3F) << 7) | (regs[REG_FSR2] & 0x7F)] = byte;
-				if (regs[REG_POSTID] & BIT_FSR2PE) {
-					if (regs[REG_POSTID] & BIT_FSR2ID) { //Auto Inc
-						if (regs[REG_FSR2] == 0xFF)
-							regs[REG_BSR2] ++; //carry
-						regs[REG_FSR2] ++;
-					}
-					else { //Auto Dec
-						if (regs[REG_FSR2] == 0x00)
-							regs[REG_BSR2] --; //borrow
-						regs[REG_FSR2] --;
-					}
-				}
+				mmio_process_postid_2();
 				break;
 			case REG_POSTID:
 			case REG_LCDARH:
@@ -250,7 +253,6 @@ void mmio_reset() {
     for (i = 0x20; i < 0x3C; i++) regs[i] = 0x00;//only clear regs
     regs[0x04] = 0x80;
     regs[0x11] = 0x80;
-	regs[0x0f] = 0xc0;
     regs[0x21] = 0x70;
     regs[0x33] = 0xFF;
     regs[0x39] = 0xFF;

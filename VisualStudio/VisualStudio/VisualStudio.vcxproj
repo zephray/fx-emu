@@ -120,6 +120,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\cpu.cpp" />
+    <ClCompile Include="..\..\debug.cpp" />
     <ClCompile Include="..\..\eps.cpp" />
     <ClCompile Include="..\..\kbd.cpp" />
     <ClCompile Include="..\..\lcd.cpp" />

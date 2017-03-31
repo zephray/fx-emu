@@ -51,6 +51,7 @@ void cpu_loop(uint32_t count) {
         instr = ((rom_read_word(pc) << 16) | rom_read_word(pc+1));
         cpu_interpret_instruction(instr);
         cnt --;
+		if (eps_get_mode() == MODE_DEBUG) cnt = 0;
     }
 }
 

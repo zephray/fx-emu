@@ -1,10 +1,13 @@
 //ePS6800 Common
 #pragma once
 
+enum run_mode { MODE_RUN, MODE_DEBUG };
+
 void eps_init();
 void eps_reset();
 void eps_run();
 void eps_deinit();
+enum run_mode eps_get_mode();
 
 #define FOSC        32768
 #define FHOSC       500000

@@ -69,7 +69,7 @@ void eps_process_key(SDL_Event &event) {
 	case SDLK_x: key = 22; break;
 	case SDLK_y: key = 23; break;
 	case SDLK_z: key = 24; break;
-	case SDLK_F1: runmode = MODE_DEBUG; break; //F1 to enter debug mode
+	case SDLK_F1:if (event.type == SDL_KEYDOWN) runmode = MODE_DEBUG; break; //F1 to enter debug mode
 	default:
 		break;
 	}
@@ -89,8 +89,16 @@ void eps_debug() {
 	char line[100];
 	char *cmd;
 	char *next_token = NULL;
+	char *disasm;
+	uint32_t pc;
+	uint32_t instr;
 
 	while (!quit) {
+		pc = ((uint32_t)mmio_read_byte_internal(REG_PCH) << 16) | ((uint32_t)mmio_read_byte_internal(REG_PCM)<<8) | ((uint32_t)mmio_read_byte_internal(REG_PCL));
+		instr = ((rom_read_word(pc) << 16) | rom_read_word(pc + 1));
+		disasm = disAsm(pc, instr);
+		printf("%s\n", disasm);
+		free(disasm);
 		printf("debug> ");
 		fflush(stdout);
 		fflush(stderr);
